@@ -1,3 +1,4 @@
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 from datasets import load_dataset
 import torch
@@ -20,7 +21,7 @@ for tokenizer in [teacher_tokenizer, student_tokenizer]:
         tokenizer.pad_token = tokenizer.eos_token
 
 # 2. 加载数据集（使用数学数据集GSM8K示例）
-dataset = load_dataset("gsm8k", "main", split="train[:1%]").train_test_split(test_size=0.1)
+dataset = load_dataset("gsm8k", "main", split="train[:20]").train_test_split(test_size=0.1)
 
 # 3. 生成教师模型的输出（logits）
 def generate_teacher_outputs(batch):
@@ -56,6 +57,7 @@ dataset = dataset.map(
     batch_size=4,
     remove_columns=dataset["train"].column_names
 )
+
 # 4. 格式化数据集（对齐学生模型输入）
 def format_dataset(batch):
     # 学生模型编码输入问题
@@ -74,7 +76,7 @@ def format_dataset(batch):
         "teacher_attention_mask": batch["attention_mask"]
     }
 
-dataset = dataset.map(format_dataset, batched=True)
+dataset = dataset.map(format_dataset, batched=True,batch_size=4)
 
 # 5. 定义知识蒸馏损失函数
 def distill_loss(student_outputs, teacher_logits, teacher_mask):
@@ -120,8 +122,9 @@ training_args = TrainingArguments(
     weight_decay=0.01,
     logging_dir="./logs",
     logging_steps=10,
-    evaluation_strategy="epoch",
-    save_strategy="epoch"
+    # evaluation_strategy="epoch",
+    save_strategy="epoch",
+    report_to="none"  # 禁用默认的报告工具（如wandb）
 )
 
 # 8. 开始训练
